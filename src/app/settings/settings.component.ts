@@ -20,7 +20,7 @@ import { EditCategoryDialogComponent } from 'app/dialogs/edit-category-dialog/ed
 })
 export class SettingsComponent implements OnInit {
   all_locales = isoLangs;
-  supported_locales = ['en', 'es', 'de', 'fr', 'zh', 'nb', 'en-GB'];
+  supported_locales = ['en', 'es', 'de', 'fr', 'nl', 'zh', 'nb', 'it', 'en-GB'];
   initialLocale = localStorage.getItem('locale');
 
   initial_config = null;
@@ -252,6 +252,14 @@ export class SettingsComponent implements OnInit {
           this.postsService.openSnackBar('Failed to kill all downloads! Check logs for details.');
         });
       }
+    });
+  }
+
+  restartServer() {
+    this.postsService.restartServer().subscribe(res => {
+      this.postsService.openSnackBar('Restarting!');
+    }, err => {
+      this.postsService.openSnackBar('Failed to restart the server.');
     });
   }
 

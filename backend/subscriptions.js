@@ -92,7 +92,7 @@ async function getSubscriptionInfo(sub, user_uid = null) {
     }
 
     return new Promise(resolve => {
-        youtubedl.exec(sub.url, downloadConfig, {}, function(err, output) {
+        youtubedl.exec(sub.url, downloadConfig, {maxBuffer: Infinity}, function(err, output) {
             if (debugMode) {
                 logger.info('Subscribe: got info for subscription ' + sub.id);
             }
@@ -211,7 +211,7 @@ async function deleteSubscriptionFile(sub, file, deleteForever, file_uid = null,
     var jsonPath = path.join(__dirname,filePath,name+'.info.json');
     var videoFilePath = path.join(__dirname,filePath,name+ext);
     var imageFilePath = path.join(__dirname,filePath,name+'.jpg');
-    var altImageFilePath = path.join(__dirname,filePath,name+'.jpg');
+    var altImageFilePath = path.join(__dirname,filePath,name+'.webp');
 
     const [jsonExists, videoFileExists, imageFileExists, altImageFileExists] = await Promise.all([
         fs.pathExists(jsonPath),
@@ -277,6 +277,7 @@ async function getVideosForSub(sub, user_uid = null) {
         basePath = config_api.getConfigItem('ytdl_subscriptions_base_path');
 
     let appendedBasePath = getAppendedBasePath(sub, basePath);
+    fs.ensureDirSync(appendedBasePath);
 
     let multiUserMode = null;
     if (user_uid) {
@@ -292,8 +293,17 @@ async function getVideosForSub(sub, user_uid = null) {
     logger.verbose('Subscription: getting videos for subscription ' + sub.name);
 
     return new Promise(resolve => {
-        youtubedl.exec(sub.url, downloadConfig, {}, async function(err, output) {
+        const preimported_file_paths = [];
+        const PREIMPORT_INTERVAL = 5000;
+        const preregister_check = setInterval(() => {
+            if (sub.streamingOnly) return;
+            db_api.preimportUnregisteredSubscriptionFile(sub, appendedBasePath);
+        }, PREIMPORT_INTERVAL);
+        youtubedl.exec(sub.url, downloadConfig, {maxBuffer: Infinity}, async function(err, output) {
+            // cleanup
             updateSubscriptionProperty(sub, {downloading: false}, user_uid);
+            clearInterval(preregister_check);
+
             logger.verbose('Subscription: finished check for ' + sub.name);
             if (err && !output) {
                 logger.error(err.stderr ? err.stderr : err.message);
@@ -337,7 +347,7 @@ async function getVideosForSub(sub, user_uid = null) {
                     }
 
                     const reset_videos = i === 0;
-                    handleOutputJSON(sub, sub_db, output_json, multiUserMode, reset_videos);
+                    handleOutputJSON(sub, sub_db, output_json, multiUserMode, preimported_file_paths, reset_videos);
                 }
 
                 if (config_api.getConfigItem('ytdl_subscriptions_redownload_fresh_uploads')) {
@@ -351,6 +361,7 @@ async function getVideosForSub(sub, user_uid = null) {
     }, err => {
         logger.error(err);
         updateSubscriptionProperty(sub, {downloading: false}, user_uid);
+        clearInterval(preregister_check);
     });
 }
 
@@ -565,7 +576,7 @@ async function checkVideoIfBetterExists(file_obj, sub, user_uid) {
             const metric_to_compare = sub.type === 'audio' ? 'abr' : 'height';
             if (output[metric_to_compare] > file_obj[metric_to_compare]) {
                 // download new video as the simulated one is better
-                youtubedl.exec(file_obj['url'], downloadConfig, async (err, output) => {
+                youtubedl.exec(file_obj['url'], downloadConfig, {maxBuffer: Infinity}, async (err, output) => {
                     if (err) {
                         logger.verbose(`Failed to download better version of video ${file_obj['id']}`);
                     } else if (output) {

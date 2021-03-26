@@ -15,7 +15,7 @@ function initialize(input_db, input_users_db, input_logger) {
     setLogger(input_logger);
 }
 
-function registerFileDB(file_path, type, multiUserMode = null, sub = null, customPath = null, category = null) {
+function registerFileDB(file_path, type, multiUserMode = null, sub = null, customPath = null, category = null, cropFileSettings = null) {
     let db_path = null;
     const file_id = utils.removeFileExtension(file_path);
     const file_object = generateFileObject(file_id, type, customPath || multiUserMode && multiUserMode.file_path, sub);
@@ -31,6 +31,11 @@ function registerFileDB(file_path, type, multiUserMode = null, sub = null, custo
 
     // if category exists, only include essential info
     if (category) file_object['category'] = {name: category['name'], uid: category['uid']};
+
+    // modify duration
+    if (cropFileSettings) {
+        file_object['duration'] = (cropFileSettings.cropFileEnd || file_object.duration) - cropFileSettings.cropFileStart;
+    }
 
     if (!sub) {
         if (multiUserMode) {
@@ -208,6 +213,29 @@ async function importUnregisteredFiles() {
 
 }
 
+async function preimportUnregisteredSubscriptionFile(sub, appendedBasePath) {
+    const preimported_file_paths = [];
+
+    let dbPath = null;
+    if (sub.user_uid)
+        dbPath = users_db.get('users').find({uid: sub.user_uid}).get('subscriptions').find({id: sub.id}).get('videos');
+    else
+        dbPath = db.get('subscriptions').find({id: sub.id}).get('videos');
+
+    const files = await utils.getDownloadedFilesByType(appendedBasePath, sub.type);
+    files.forEach(file => {
+        // check if file exists in db, if not add it
+        const file_is_registered = !!(dbPath.find({id: file.id}).value())
+        if (!file_is_registered) {
+            // add additional info
+            registerFileDBManual(dbPath, file);
+            preimported_file_paths.push(file['path']);
+            logger.verbose(`Preemptively added subscription file to the database: ${file.id}`);
+        }
+    });
+    return preimported_file_paths;
+}
+
 async function getVideo(file_uid, uuid, sub_id) {
     const base_db_path = uuid ? users_db.get('users').find({uid: uuid}) : db;
     const sub_db_path = sub_id ? base_db_path.get('subscriptions').find({id: sub_id}).get('videos') : base_db_path.get('files');
@@ -230,6 +258,7 @@ module.exports = {
     updatePlaylist: updatePlaylist,
     getFileDirectoriesAndDBs: getFileDirectoriesAndDBs,
     importUnregisteredFiles: importUnregisteredFiles,
+    preimportUnregisteredSubscriptionFile: preimportUnregisteredSubscriptionFile,
     getVideo: getVideo,
     setVideoProperty: setVideoProperty
 }

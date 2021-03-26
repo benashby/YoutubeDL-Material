@@ -183,7 +183,7 @@ export class PostsService implements CanActivate {
     }
 
     // tslint:disable-next-line: max-line-length
-    makeMP4(url: string, selectedQuality: string, customQualityConfiguration: string, customArgs: string = null, customOutput: string = null, youtubeUsername: string = null, youtubePassword: string = null, ui_uid = null) {
+    makeMP4(url: string, selectedQuality: string, customQualityConfiguration: string, customArgs: string = null, customOutput: string = null, youtubeUsername: string = null, youtubePassword: string = null, ui_uid = null, cropFileSettings = null) {
         return this.http.post(this.path + 'tomp4', {url: url,
                                                     selectedHeight: selectedQuality,
                                                     customQualityConfiguration: customQualityConfiguration,
@@ -191,11 +191,16 @@ export class PostsService implements CanActivate {
                                                     customOutput: customOutput,
                                                     youtubeUsername: youtubeUsername,
                                                     youtubePassword: youtubePassword,
-                                                    ui_uid: ui_uid}, this.httpOptions);
+                                                    ui_uid: ui_uid,
+                                                    cropFileSettings: cropFileSettings}, this.httpOptions);
     }
 
     killAllDownloads() {
         return this.http.post(this.path + 'killAllDownloads', {}, this.httpOptions);
+    }
+
+    restartServer() {
+        return this.http.post(this.path + 'restartServer', {}, this.httpOptions);
     }
 
     loadNavItems() {
@@ -357,14 +362,17 @@ export class PostsService implements CanActivate {
     }
 
     updateSubscription(subscription) {
+        delete subscription['videos'];
         return this.http.post(this.path + 'updateSubscription', {subscription: subscription}, this.httpOptions);
     }
 
     unsubscribe(sub, deleteMode = false) {
+        delete sub['videos'];
         return this.http.post(this.path + 'unsubscribe', {sub: sub, deleteMode: deleteMode}, this.httpOptions)
     }
 
     deleteSubscriptionFile(sub, file, deleteForever, file_uid) {
+        delete sub['videos'];
         return this.http.post(this.path + 'deleteSubscriptionFile', {sub: sub, file: file, deleteForever: deleteForever,
                                                                     file_uid: file_uid}, this.httpOptions)
     }
